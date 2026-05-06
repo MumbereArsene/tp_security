@@ -1,0 +1,6 @@
+{
+  "name": "Testeur d'Authentification",
+  "description": "Testeur d'authentification par force brute avec journal en temps réel et architecture modulaire. Idéal pour la recherche en cybersécurité et l'audit de conformité.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
