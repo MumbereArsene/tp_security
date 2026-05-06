@@ -1,35 +1,42 @@
-
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
-import { useSimulation } from '../lib/useSimulation';
-import { Terminal as TerminalIcon, ShieldAlert, Wifi, Cpu } from 'lucide-react';
+import { Terminal as TerminalIcon } from 'lucide-react';
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:5000');
 
 export function Terminal() {
-  const { lastEvent } = useSimulation();
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<{line: string, timestamp: string}[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (lastEvent) {
-      const time = lastEvent.timestamp;
-      let message = "";
-      
-      switch(lastEvent.status) {
-        case 'SUCCESS':
-          message = `[${time}] !! INTRUSION DETECTED !! USER: ${lastEvent.username} authenticated from ${lastEvent.ip} (${lastEvent.country})`;
-          break;
-        case 'BLOCKED':
-          message = `[${time}] [SECURITY] IP ${lastEvent.ip} blocked. Reason: Excess threshold. Source: ${lastEvent.country}`;
-          break;
-        case 'FAILED':
-          message = `[${time}] [FAILED] Attempt: ${lastEvent.username} / ${lastEvent.password.replace(/./g, '*')} from ${lastEvent.ip}`;
-          break;
+    // 1. Fetch History from Database
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/terminal/history');
+        const data = await res.json();
+        setLogs(data);
+      } catch (e) {
+        console.error("Failed to fetch terminal history", e);
       }
-      
-      setLogs(prev => [...prev, message].slice(-100));
-    }
-  }, [lastEvent]);
+    };
+    fetchHistory();
+
+    // 2. Real-time listener
+    socket.on('new_terminal_log', (data) => {
+      setLogs(prev => [...prev, data].slice(-1000));
+    });
+
+    socket.on('dashboard_reset', () => {
+      setLogs([]);
+    });
+
+    return () => {
+      socket.off('new_terminal_log');
+      socket.off('dashboard_reset');
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -38,78 +45,63 @@ export function Terminal() {
   }, [logs]);
 
   return (
-    <div className="bg-[#060e20] border border-outline-variant/30 rounded-lg overflow-hidden flex flex-col h-full min-h-[350px] shadow-2xl relative group">
-      {/* Glow Effect */}
-      <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-      
-      {/* Header */}
-      <div className="bg-surface-container-high/50 px-4 py-2 border-b border-outline-variant/30 flex justify-between items-center backdrop-blur-md relative z-10">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1.5 mr-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-error/40 border border-error/50" />
-            <div className="w-2.5 h-2.5 rounded-full bg-warning/40 border border-warning/50" />
-            <div className="w-2.5 h-2.5 rounded-full bg-secondary/40 border border-secondary/50" />
+    <div className="bg-[#050505] border border-white/10 rounded-xl overflow-hidden flex flex-col h-full min-h-[500px] shadow-2xl relative">
+      <div className="bg-[#1a1a1a] px-4 py-2 flex items-center justify-between border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
+            <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
+            <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
           </div>
-          <TerminalIcon size={14} className="text-primary/70" />
-          <span className="font-mono text-[10px] text-primary/70 uppercase tracking-[0.2em] font-bold">SOC_CORE_LOG_STREAM.EXE</span>
-        </div>
-        <div className="flex items-center gap-4 text-[9px] font-mono text-outline/50 uppercase tracking-widest">
-          <div className="flex items-center gap-1">
-            <Wifi size={10} className="text-secondary animate-pulse" />
-            <span>CONNECTED</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Cpu size={10} className="text-primary" />
-            <span>BUFFER: 94%</span>
-          </div>
+          <div className="h-4 w-[1px] bg-white/10 mx-2" />
+          <TerminalIcon size={14} className="text-white/40" />
+          <span className="font-mono text-[11px] text-white/60 tracking-wider font-bold">HYDRA_AUDIT_SESSION_LIVE</span>
         </div>
       </div>
 
-      {/* Log Body */}
       <div 
         ref={scrollRef} 
-        className="p-4 font-mono text-[11px] overflow-y-auto space-y-1.5 scrollbar-hide flex-1 relative z-10 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,0)_0%,rgba(6,14,32,1)_100%)]"
+        className="p-6 font-mono text-[12px] overflow-y-auto space-y-0.5 scrollbar-thin scrollbar-thumb-white/10 flex-1 bg-black"
       >
-        <div className="opacity-40 mb-4 border-b border-outline-variant/20 pb-2">
-          [SYSTEM] Initializing Brute Force Simulation Engine...<br/>
-          [SYSTEM] Wordlist loaded: common_passwords_v2.txt<br/>
-          [SYSTEM] Proxies initialized: 1,402 active nodes.<br/>
-          [SYSTEM] Target: PRODUCTION_AUTH_SERVICE_01
-        </div>
-
         <AnimatePresence initial={false}>
           {logs.map((log, i) => {
-            const isCritical = log.includes('!!');
-            const isBlocked = log.includes('[SECURITY]');
-            const isFailed = log.includes('[FAILED]');
+            const isSuccess = log.line.includes('SUCCESS');
+            const isError = log.line.includes('ERROR');
+            const isHeader = log.line.includes('===') || log.line.includes('---');
+            const isStatus = log.line.includes('[!]') || log.line.includes('[*]');
 
             return (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 className={cn(
-                  "border-l-2 pl-3 py-0.5 transition-colors",
-                  isCritical ? "text-error border-error bg-error/5 font-bold" : 
-                  isBlocked ? "text-orange-400 border-orange-400 bg-orange-400/5" : 
-                  isFailed ? "text-primary/60 border-primary/20" : 
-                  "text-outline border-transparent"
+                  "whitespace-pre font-mono leading-relaxed",
+                  isSuccess ? "text-[#27c93f] font-bold" : 
+                  isError ? "text-[#ff5f56]" : 
+                  isHeader ? "text-[#00d4ff] opacity-80" :
+                  isStatus ? "text-[#ffbd2e]" :
+                  "text-[#d1d1d1]"
                 )}
               >
-                {log}
+                {log.line}
               </motion.div>
             );
           })}
         </AnimatePresence>
         
         <div className="flex items-center gap-2 pt-2">
-          <span className="text-secondary font-bold tracking-tighter">root@soc_monitor:~$</span>
-          <span className="w-2 h-4 bg-secondary/60 animate-[blink_1s_step-end_infinite]" />
+          <span className="text-[#27c93f] font-bold">root@soc:~$</span>
+          <span className="w-2 h-4 bg-white/40 animate-[blink_1s_step-end_infinite]" />
         </div>
       </div>
-
-      {/* Decorative scanline */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.03] scanline z-20" />
+      
+      <style>{`
+        @keyframes blink {
+          from, to { opacity: 0; }
+          50% { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }

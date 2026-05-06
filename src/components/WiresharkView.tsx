@@ -1,15 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Activity, Network, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:5000');
 
 export default function WiresharkView() {
   const [packets, setPackets] = useState<any[]>([]);
   const [filter, setFilter] = useState('http || tcp');
 
   useEffect(() => {
+    // 1. Initial Fetch to populate current state
     fetchPackets();
-    const interval = setInterval(fetchPackets, 5000);
-    return () => clearInterval(interval);
+
+    // 2. REAL-TIME EVENT LISTENER (No Polling)
+    socket.on('new_packet', (packet: any) => {
+      setPackets(prev => [packet, ...prev].slice(0, 50));
+    });
+
+    return () => {
+      socket.off('new_packet');
+    };
   }, []);
 
   const fetchPackets = async () => {
@@ -17,7 +28,9 @@ export default function WiresharkView() {
       const res = await fetch('http://localhost:5000/api/packets');
       const data = await res.json();
       setPackets(data);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error("Failed to fetch initial packets:", e); 
+    }
   };
 
   return (
@@ -55,8 +68,10 @@ export default function WiresharkView() {
         </div>
         <div className="h-[500px] overflow-y-auto terminal-scroll font-mono text-[10px]">
           {packets.map((p, i) => (
-            <div 
-              key={i} 
+            <motion.div 
+              initial={{ opacity: 0, backgroundColor: "rgba(0, 242, 255, 0.1)" }}
+              animate={{ opacity: 1, backgroundColor: "transparent" }}
+              key={`${p.no}-${i}`} 
               className={`grid grid-cols-12 gap-2 p-2 border-b border-white/5 hover:bg-primary/10 cursor-pointer transition-colors ${
                 p.protocol === 'HTTP' ? 'bg-cyber-blue/5' : 
                 p.protocol === 'TCP' ? 'bg-cyber-purple/5' : ''
@@ -69,7 +84,7 @@ export default function WiresharkView() {
               <div className="col-span-1 font-bold text-primary">{p.protocol}</div>
               <div className="col-span-1 text-on-surface/60">{p.length}</div>
               <div className="col-span-4 truncate text-on-surface/80">{p.info}</div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>

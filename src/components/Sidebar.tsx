@@ -1,100 +1,105 @@
-
 import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, 
-  Terminal, 
-  ShieldCheck, 
-  Settings, 
-  Database, 
-  Globe, 
-  FileText,
-  Activity,
-  LogOut
+  Activity, 
+  Zap, 
+  Search, 
+  Terminal as TerminalIcon,
+  LogOut,
+  ShieldAlert
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-interface SidebarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-}
+export function Sidebar() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { logout } = useAuth();
+  
+  const currentTab = searchParams.get('tab') || 'monitor';
 
-export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const menuItems = [
-    { id: 'dashboard', label: 'Operations', icon: LayoutDashboard },
-    { id: 'logs', label: 'Packet Audit', icon: Database },
-    { id: 'threats', label: 'Threat Intel', icon: ShieldCheck },
-    { id: 'network', label: 'Network Map', icon: Globe },
-    { id: 'analysis', label: 'Deep Analysis', icon: Activity },
-    { id: 'reports', label: 'Export Logs', icon: FileText },
+    { id: 'operations', label: 'Operations', icon: LayoutDashboard, path: '/dashboard', tab: 'monitor' },
+    { id: 'monitoring', label: 'Live Monitoring', icon: Activity, path: '/dashboard', tab: 'monitor' },
+    { id: 'simulator', label: 'Attack Simulator', icon: Zap, path: '/dashboard', tab: 'bruteforce' },
+    { id: 'packet', label: 'Packet Inspector', icon: Search, path: '/dashboard', tab: 'network' },
+    { id: 'hydra', label: 'Hydra Attaque', icon: TerminalIcon, path: '/logs', tab: null },
   ];
 
+  const handleNavigate = (path: string, tab: string | null) => {
+    if (tab) {
+      navigate(`${path}?tab=${tab}`);
+    } else {
+      navigate(path);
+    }
+  };
+
   return (
-    <aside className="fixed left-0 top-16 bottom-0 w-64 bg-surface-container border-r border-outline-variant/20 flex flex-col z-40">
-      <div className="p-6">
-        <div className="font-mono text-[10px] text-outline uppercase tracking-widest mb-4 opacity-50 font-bold italic">Command & Control</div>
-        <nav className="space-y-1">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-md font-mono text-[11px] uppercase tracking-wider transition-all relative group",
-                activeTab === item.id 
-                  ? "text-primary bg-primary/10 border-l-2 border-primary" 
-                  : "text-outline hover:text-on-surface hover:bg-surface-container-highest/50 border-l-2 border-transparent"
-              )}
-            >
-              <item.icon size={16} className={cn(
-                "transition-colors",
-                activeTab === item.id ? "text-primary" : "text-outline group-hover:text-primary"
-              )} />
-              {item.label}
-              
-              {activeTab === item.id && (
-                <motion.div 
-                  layoutId="active-pill"
-                  className="absolute right-2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_#adc6ff]"
-                />
-              )}
-            </button>
-          ))}
+    <aside className="fixed left-0 top-0 bottom-0 w-72 bg-[#050505] border-r border-white/5 flex flex-col z-50 h-screen shadow-2xl">
+      <div className="p-8 border-b border-white/5">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/40">
+            <ShieldAlert size={18} className="text-primary" />
+          </div>
+          <span className="text-sm font-black text-white uppercase tracking-tighter">CyberSOC <span className="text-primary">Alpha-1</span></span>
+        </div>
+        <div className="font-mono text-[8px] text-white/30 uppercase tracking-[0.5em] pl-1">Command Center</div>
+      </div>
+
+      <div className="p-6 flex-1 overflow-y-auto">
+        <nav className="space-y-2">
+          {menuItems.map((item) => {
+            const isActive = location.pathname === item.path && (item.tab ? currentTab === item.tab : true);
+            
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNavigate(item.path, item.tab)}
+                className={cn(
+                  "w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-mono text-[11px] uppercase tracking-wider transition-all relative group",
+                  isActive
+                    ? "text-primary bg-primary/10 border border-primary/20 shadow-[0_0_20px_rgba(173,198,255,0.05)]" 
+                    : "text-white/40 hover:text-white hover:bg-white/[0.03] border border-transparent"
+                )}
+              >
+                <item.icon size={18} className={cn(
+                  "transition-colors",
+                  isActive ? "text-primary" : "group-hover:text-primary"
+                )} />
+                {item.label}
+                
+                {isActive && (
+                  <motion.div 
+                    layoutId="active-pill"
+                    className="absolute right-4 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_10px_#adc6ff]"
+                  />
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
-      <div className="mt-auto p-6 space-y-6">
-        <div className="bg-surface-container-lowest/50 rounded-lg p-4 border border-outline-variant/20">
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-mono text-[9px] text-outline uppercase">Node Latency</span>
-            <span className="font-mono text-[9px] text-secondary font-bold">14ms</span>
-          </div>
-          <div className="h-1 bg-surface-container-highest rounded-full overflow-hidden">
-            <motion.div 
-              animate={{ width: ['10%', '15%', '12%'] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="h-full bg-secondary"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-2 pt-4 border-t border-outline-variant/20">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
-              <span className="font-mono text-[10px] font-bold text-primary">OP</span>
+      <div className="p-8 border-t border-white/5 space-y-6 bg-black/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+              <span className="font-mono text-xs font-bold text-primary italic">JP</span>
             </div>
             <div className="flex flex-col">
-              <span className="font-mono text-[10px] text-on-surface font-bold uppercase">Jerome_P</span>
-              <span className="font-mono text-[8px] text-secondary uppercase tracking-widest">Admin_Level_4</span>
+              <span className="font-mono text-[10px] text-white font-bold uppercase tracking-tight">Operator_01</span>
+              <span className="font-mono text-[8px] text-green-500 uppercase tracking-[0.2em] animate-pulse">Online</span>
             </div>
           </div>
-          <button className="text-outline hover:text-error transition-colors">
-            <LogOut size={16} />
+          <button 
+            onClick={logout}
+            className="text-white/20 hover:text-red-400 transition-colors p-2"
+          >
+            <LogOut size={18} />
           </button>
         </div>
-      </div>
-      
-      {/* Decorative vertical text */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 rotate-90 text-[60px] font-bold opacity-[0.02] pointer-events-none select-none font-mono">
-        SYSTEM_ACTIVE
       </div>
     </aside>
   );
